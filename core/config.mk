@@ -474,9 +474,7 @@ endif
 # See envsetup.mk for a description of SCAN_EXCLUDE_DIRS
 FIND_LEAVES_EXCLUDES := $(addprefix --prune=, $(SCAN_EXCLUDE_DIRS) .repo .git)
 
-ifneq ($(LINEAGE_BUILD),)
-include vendor/lineage/config/BoardConfigLineage.mk
-endif
+include vendor/twrp/config/BoardConfigTWRP.mk
 
 # The build system exposes several variables for where to find the kernel
 # headers:
