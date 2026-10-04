@@ -1342,6 +1342,11 @@ function ax_help() {
     echo -e "  ${YELLOW}clearRBECache${RESET}   ${CYAN}discard local RBE action cache${RESET}"
     echo -e "  ${YELLOW}skipGlobs${RESET}       ${CYAN}skip ninja globs (1/0)${RESET}"
     echo
+    echo -e "${BOLD}Kernel & Module commands:${RESET}"
+    echo -e "  ${YELLOW}bKernel${RESET}     ${CYAN}build kernel, boot, and module images${RESET}"
+    echo -e "  ${YELLOW}iKernel${RESET}     ${CYAN}flash kernel, dtbo, and dlkm via fastboot${RESET}"
+    echo -e "  ${YELLOW}biKernel${RESET}    ${CYAN}build and flash kernel and modules${RESET}"
+    echo
     echo -e "${BOLD}Build Types:${RESET}"
     echo -e "  ${YELLOW}-b${RESET}   ${CYAN}Bacon${RESET}"
     echo -e "  ${YELLOW}-fb${RESET}  ${CYAN}Fastboot${RESET}"
@@ -1570,6 +1575,134 @@ function iPart() {
         echo "Error: fastboot flash failed for $partition."
         return 1
     fi
+}
+
+function bKernel() {
+    local target_device
+    target_device="$(get_build_var TARGET_DEVICE)"
+    if [[ -z "$target_device" ]]; then
+        echo "Error: No target device set. Please run 'lunch' or 'axion' first."
+        return 1
+    fi
+
+    echo "Building kernel, boot, vendor, and module images for $target_device..."
+    if ! m bootimage vendorbootimage vendor_dlkmimage vendorimage "$@"; then
+        echo "Error: Kernel, vendor, and modules build failed."
+        return 1
+    fi
+    echo "Kernel, vendor, and modules build succeeded!"
+}
+
+function iKernel() {
+    local target_device
+    target_device="$(get_build_var TARGET_DEVICE)"
+    if [[ -z "$target_device" ]]; then
+        echo "Error: No target device set. Please run 'lunch' or 'axion' first."
+        return 1
+    fi
+
+    local out_dir="out/target/product/$target_device"
+    local boot_img="$out_dir/boot.img"
+    local dtbo_img="$out_dir/dtbo.img"
+    local vendor_boot_img="$out_dir/vendor_boot.img"
+    local vendor_dlkm_img="$out_dir/vendor_dlkm.img"
+    local vendor_img="$out_dir/vendor.img"
+
+    if [[ ! -f "$boot_img" ]]; then
+        echo "Error: $boot_img not found. Run 'bKernel' first."
+        return 1
+    fi
+
+    local has_dynamic=false
+    if [[ -f "$vendor_dlkm_img" ]] || [[ -f "$vendor_img" ]]; then
+        has_dynamic=true
+    fi
+
+    if fastboot devices | grep -q '^[a-zA-Z0-9]\+'; then
+        echo "Fastboot device detected!"
+        if [[ "$has_dynamic" == "true" ]]; then
+            local is_userspace
+            is_userspace="$(fastboot getvar is-userspace 2>&1 | grep 'is-userspace:' | awk '{print $2}' | tr -d '\r')"
+            if [[ "$is_userspace" != "yes" ]]; then
+                echo "Rebooting from bootloader to fastbootd for dynamic partitions..."
+                fastboot reboot fastboot
+                until fastboot devices | grep -q '^[a-zA-Z0-9]\+'; do
+                    sleep 1
+                done
+            fi
+        fi
+    elif adb get-state 1>/dev/null 2>&1; then
+        if [[ "$has_dynamic" == "true" ]]; then
+            echo "Device detected via ADB. Rebooting to fastbootd..."
+            adb reboot fastboot
+        else
+            echo "Device detected via ADB. Rebooting to bootloader..."
+            adb reboot bootloader
+        fi
+        echo "Waiting for fastboot device..."
+        until fastboot devices | grep -q '^[a-zA-Z0-9]\+'; do
+            sleep 1
+        done
+        echo "Fastboot device detected!"
+    else
+        echo "Waiting for device (ADB or fastboot)..."
+        until fastboot devices | grep -q '^[a-zA-Z0-9]\+' || adb get-state 1>/dev/null 2>&1; do
+            sleep 2
+        done
+        if ! fastboot devices | grep -q '^[a-zA-Z0-9]\+'; then
+            if [[ "$has_dynamic" == "true" ]]; then
+                echo "Device detected via ADB. Rebooting to fastbootd..."
+                adb reboot fastboot
+            else
+                echo "Device detected via ADB. Rebooting to bootloader..."
+                adb reboot bootloader
+            fi
+            echo "Waiting for fastboot device..."
+            until fastboot devices | grep -q '^[a-zA-Z0-9]\+'; do
+                sleep 1
+            done
+        fi
+        echo "Fastboot device detected!"
+    fi
+
+    echo "Flashing boot partition: $boot_img"
+    if ! fastboot flash boot "$boot_img"; then
+        echo "Error: Failed to flash boot partition."
+        return 1
+    fi
+
+    if [[ -f "$dtbo_img" ]]; then
+        echo "Flashing dtbo partition: $dtbo_img"
+        fastboot flash dtbo "$dtbo_img"
+    fi
+
+    if [[ -f "$vendor_boot_img" ]]; then
+        echo "Flashing vendor_boot partition: $vendor_boot_img"
+        fastboot flash vendor_boot "$vendor_boot_img"
+    fi
+
+    if [[ -f "$vendor_dlkm_img" ]]; then
+        echo "Flashing vendor_dlkm partition: $vendor_dlkm_img"
+        fastboot flash vendor_dlkm "$vendor_dlkm_img"
+    fi
+
+    if [[ -f "$vendor_img" ]]; then
+        echo "Flashing vendor partition: $vendor_img"
+        fastboot flash vendor "$vendor_img"
+    fi
+
+    echo "Rebooting device..."
+    fastboot reboot
+    echo "Kernel, vendor, and modules successfully flashed!"
+}
+
+function biKernel() {
+    if ! bKernel "$@"; then
+        echo "Error: Build failed. Aborting installation."
+        return 1
+    fi
+
+    iKernel
 }
 
 function setup_ccache() {
