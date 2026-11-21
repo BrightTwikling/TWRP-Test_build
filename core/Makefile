@@ -2457,7 +2457,7 @@ $(eval $(call declare-0p-target,$(INSTALLED_FILES_JSON_RECOVERY)))
 recovery_sepolicy := \
     $(TARGET_RECOVERY_ROOT_OUT)/sepolicy \
     $(TARGET_RECOVERY_ROOT_OUT)/plat_file_contexts \
-    $(TARGET_RECOVERY_ROOT_OUT)/plat_service_contexts \
+    $(TARGET_RECOVERY_ROOT_OUT)/system/etc/selinux/plat_service_contexts \
     $(TARGET_RECOVERY_ROOT_OUT)/plat_property_contexts \
     $(TARGET_RECOVERY_ROOT_OUT)/system_ext_file_contexts \
     $(TARGET_RECOVERY_ROOT_OUT)/system_ext_service_contexts \
