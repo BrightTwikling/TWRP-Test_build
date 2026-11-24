@@ -610,7 +610,8 @@ function lunch()
             variant=eng
         fi
     fi
-
+    check_product $product $release
+    
     # Validate the selection and set all the environment stuff
     _lunch_meat $product $release $variant
 
