@@ -30,6 +30,7 @@ rust_library {
     min_sdk_version: "29",
     vendor_available: true,
     product_available: true,
+    recovery_available: true,
 }
 
 rust_library {
@@ -79,6 +80,7 @@ rust_protobuf {
     min_sdk_version: "29",
     vendor_available: true,
     product_available: true,
+    recovery_available: true,
 }
 
 cc_library {
